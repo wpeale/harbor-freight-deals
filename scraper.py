@@ -20,7 +20,6 @@ class Coupon:
     price: float
     code: str
     expiration: str
-    item_number: str
     image_url: str
     url: str
 
@@ -49,9 +48,10 @@ class HarborFreightScraper:
         soup = self._fetch_page(f"{HF_COUPON_BASE_URL}/page/1/")
 
         # Look for pagination links - find the highest page number
-        pagination = soup.find("nav", class_="navigation")
+        pagination = soup.find("div", class_="nav-links")
         if not pagination:
-            # Try alternative pagination selectors
+            pagination = soup.find("nav", class_="navigation")
+        if not pagination:
             pagination = soup.find("div", class_="pagination")
 
         if pagination:
@@ -86,6 +86,11 @@ class HarborFreightScraper:
         articles = soup.find_all("article")
 
         for article in articles:
+            # Skip articles that don't look like coupons
+            text_content = article.get_text()
+            if "Code" not in text_content or "Exp" not in text_content:
+                continue
+
             coupon = self._parse_article(article)
             if coupon:
                 coupons.append(coupon)
@@ -104,6 +109,10 @@ class HarborFreightScraper:
 
         name = link_elem.get_text(strip=True)
         url = link_elem.get("href", "")
+
+        # Make URL absolute if it's relative
+        if url and not url.startswith("http"):
+            url = HF_COUPON_BASE_URL + url
 
         if not name or len(name) < 5:
             return None
@@ -130,11 +139,6 @@ class HarborFreightScraper:
         match = re.search(r"Exp\.?\s*(\d{1,2}/\d{1,2}/\d{2,4})", text, re.IGNORECASE)
         return match.group(1) if match else ""
 
-    def _extract_item_number(self, text: str) -> Optional[str]:
-        """Extract item number from text content."""
-        match = re.search(r"Item\s*[:#]?\s*(\d+)", text, re.IGNORECASE)
-        return match.group(1) if match else None
-
     def _extract_image_url(self, article) -> Optional[str]:
         """Extract image URL from article element."""
         img_elem = article.find("img")
@@ -153,10 +157,9 @@ class HarborFreightScraper:
         code = self._extract_code(text_content)
         expiration = self._extract_expiration(text_content)
         price = self._extract_price(text_content)
-        item_number = self._extract_item_number(text_content)
         image_url = self._extract_image_url(article)
 
-        if not all([code, expiration, price is not None, item_number, image_url]):
+        if not all([code, expiration, price is not None, image_url]):
             return None
 
         return Coupon(
@@ -164,7 +167,6 @@ class HarborFreightScraper:
             price=price,
             code=code,
             expiration=expiration,
-            item_number=item_number,
             image_url=image_url,
             url=coupon_url,
         )
@@ -196,7 +198,6 @@ class HarborFreightScraper:
             lines.append(f"- Price: ${coupon.price:,.2f}")
             lines.append(f"- Code: {coupon.code}")
             lines.append(f"- Expires: {coupon.expiration}")
-            lines.append(f"- Item #: {coupon.item_number}")
             lines.append("")  # Blank line between coupons
 
         return "\n".join(lines)
