@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 
 
 HF_COUPON_BASE_URL = "https://go.harborfreight.com"
-HF_QUERY_DELAY = 1.0
+HF_QUERY_DELAY = 0.05
 
 @dataclass
 class Coupon:
